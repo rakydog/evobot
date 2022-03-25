@@ -1,0 +1,35 @@
+
+
+{
+  "YOUTUBE_API_KEY": "AIzaSyC8t2a7R0-tPEknNKBOL_eHVXyGe4Vs70c",
+
+
+  "EMOJI_ARROW": "",
+  "EMOJI_DONE": "",
+  "EMOJI_ERROR": "",
+  "EMOJI_STARTED_PLAYING": "",
+  "EMOJI_LINE":"",
+
+
+  "BOT_ID": "951170318410588212",
+  "BOT_OWNER_ID": "932372940534734989", 
+  "SERVER_INVITE": "https://discord.gg/5tpxHgUams", 
+
+  "PREFIX": "R!", 
+  "BOT_PREFIX": "R!",
+
+
+  "BOT_STATUS2":"Bit.ly/RakyMusic",
+  "BOT_STATUS3": "Viendo YouTube Raky Dog",
+  
+  "BOT_PRESENCE" : "WATCHING",
+
+  "SOUNDCLOUD_CLIENT_ID": "",
+  "MAX_PLAYLIST_SIZE": 900,
+  "PRUNING": true,
+  "STAY_TIME": 30,
+  "DEFAULT_VOLUME": 100
+}
+
+
+     
