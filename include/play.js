@@ -1,11 +1,10 @@
-const ytdl = require("ytdl-core-discord");
+const ytdl = require("erit-ytdl");
 const scdl = require("soundcloud-downloader").default;
-const { canModifyQueue, STAY_TIME } = require("../util/Util");
-const i18n = require("../util/i18n");
-
+const { canModifyQueue, STAY_TIME } = require("../config.json");
+const {EMOJI_ARROW , EMOJI_STARTED_PLAYING , EMOJI_DONE }= require('../config.json');
 module.exports = {
-  async play(song, message, silent = false) {
-    const { SOUNDCLOUD_CLIENT_ID } = require("../util/Util");
+  async play(song, message) {
+    const { SOUNDCLOUD_CLIENT_ID } = require("../config.json");
 
     let config;
 
@@ -20,14 +19,10 @@ module.exports = {
     const queue = message.client.queue.get(message.guild.id);
 
     if (!song) {
-      setTimeout(function () {
-        if (queue.connection.dispatcher && message.guild.me.voice.channel) return;
-        queue.channel.leave();
-        !PRUNING && queue.textChannel.send(i18n.__("play.leaveChannel"));
-      }, STAY_TIME * 1000);
-      !PRUNING && queue.textChannel.send(i18n.__("play.queueEnded")).catch(console.error);
-      return message.client.queue.delete(message.guild.id);
-    }
+      if (queue.connection.dispatcher && message.guild.me.voice.channel) return;
+    queue.textChannel.send(``).catch(console.error);
+    return message.client.queue.delete(message.guild.id);
+  }
 
     let stream = null;
     let streamType = song.url.includes("youtube.com") ? "opus" : "ogg/opus";
@@ -50,9 +45,7 @@ module.exports = {
       }
 
       console.error(error);
-      return message.channel.send(
-        i18n.__mf("play.queueError", { error: error.message ? error.message : error })
-      );
+      return message.channel.send(`Error: ${error.message ? error.message : error}`);
     }
 
     queue.connection.on("disconnect", () => message.client.queue.delete(message.guild.id));
@@ -62,14 +55,12 @@ module.exports = {
       .on("finish", () => {
         if (collector && !collector.ended) collector.stop();
 
-        queue.connection.removeAllListeners("disconnect");
-
-        if (queue.loop && queue.songs.length > 0) {
+        if (queue.loop) {
           // if loop is on, push the song back at the end of the queue
           // so it can repeat endlessly
           let lastSong = queue.songs.shift();
           queue.songs.push(lastSong);
-          module.exports.play(queue.songs[0], message, queue.songs[0].url == lastSong.url);
+          module.exports.play(queue.songs[0], message);
         } else {
           // Recursively play the next song
           queue.songs.shift();
@@ -83,145 +74,129 @@ module.exports = {
       });
     dispatcher.setVolumeLogarithmic(queue.volume / 100);
 
-    if (!silent) {
-      try {
-        var playingMessage = await queue.textChannel.send(
-          i18n.__mf("play.startedPlaying", { title: song.title, url: song.url })
-        );
-        await playingMessage.react("⏭");
-        await playingMessage.react("⏯");
-        await playingMessage.react("🔇");
-        await playingMessage.react("🔉");
-        await playingMessage.react("🔊");
-        await playingMessage.react("🔁");
-        await playingMessage.react("🔀");
-        await playingMessage.react("⏹");
-      } catch (error) {
-        console.error(error);
-      }
+    try {
 
-      const filter = (reaction, user) => user.id !== message.client.user.id;
-      var collector = playingMessage.createReactionCollector(filter, {
-        time: song.duration > 0 ? song.duration * 1000 : 600000
-      });
 
-      collector.on("collect", (reaction, user) => {
-        if (!queue) return;
-        const member = message.guild.member(user);
+      
+   
+      
+var playingMessage = await queue.textChannel.send(`
+${EMOJI_STARTED_PLAYING} ok 
+${EMOJI_ARROW}   
+${EMOJI_ARROW}`);
 
-        switch (reaction.emoji.name) {
-          case "⏭":
-            queue.playing = true;
-            reaction.users.remove(user).catch(console.error);
-            if (!canModifyQueue(member)) return i18n.__("common.errorNotChannel");
-            queue.connection.dispatcher.end();
-            queue.textChannel.send(i18n.__mf("play.skipSong", { author: user })).catch(console.error);
-            collector.stop();
-            break;
-
-          case "⏯":
-            reaction.users.remove(user).catch(console.error);
-            if (!canModifyQueue(member)) return i18n.__("common.errorNotChannel");
-            if (queue.playing) {
-              queue.playing = !queue.playing;
-              queue.connection.dispatcher.pause(true);
-              queue.textChannel.send(i18n.__mf("play.pauseSong", { author: user })).catch(console.error);
-            } else {
-              queue.playing = !queue.playing;
-              queue.connection.dispatcher.resume();
-              queue.textChannel.send(i18n.__mf("play.resumeSong", { author: user })).catch(console.error);
-            }
-            break;
-
-          case "🔇":
-            reaction.users.remove(user).catch(console.error);
-            if (!canModifyQueue(member)) return i18n.__("common.errorNotChannel");
-            queue.muted = !queue.muted;
-            if (queue.muted) {
-              queue.connection.dispatcher.setVolumeLogarithmic(0);
-              queue.textChannel.send(i18n.__mf("play.mutedSong", { author: user })).catch(console.error);
-            } else {
-              queue.connection.dispatcher.setVolumeLogarithmic(queue.volume / 100);
-              queue.textChannel.send(i18n.__mf("play.unmutedSong", { author: user })).catch(console.error);
-            }
-            break;
-
-          case "🔉":
-            reaction.users.remove(user).catch(console.error);
-            if (queue.volume == 0) return;
-            if (!canModifyQueue(member)) return i18n.__("common.errorNotChannel");
-            queue.volume = Math.max(queue.volume - 10, 0);
-            queue.connection.dispatcher.setVolumeLogarithmic(queue.volume / 100);
-            queue.textChannel
-              .send(i18n.__mf("play.decreasedVolume", { author: user, volume: queue.volume }))
-              .catch(console.error);
-            break;
-
-          case "🔊":
-            reaction.users.remove(user).catch(console.error);
-            if (queue.volume == 100) return;
-            if (!canModifyQueue(member)) return i18n.__("common.errorNotChannel");
-            queue.volume = Math.min(queue.volume + 10, 100);
-            queue.connection.dispatcher.setVolumeLogarithmic(queue.volume / 100);
-            queue.textChannel
-              .send(i18n.__mf("play.increasedVolume", { author: user, volume: queue.volume }))
-              .catch(console.error);
-            break;
-
-          case "🔁":
-            reaction.users.remove(user).catch(console.error);
-            if (!canModifyQueue(member)) return i18n.__("common.errorNotChannel");
-            queue.loop = !queue.loop;
-            queue.textChannel
-              .send(
-                i18n.__mf("play.loopSong", {
-                  author: user,
-                  loop: queue.loop ? i18n.__("common.on") : i18n.__("common.off")
-                })
-              )
-              .catch(console.error);
-            break;
-
-          case "🔀":
-            reaction.users.remove(user).catch(console.error);
-            if (!canModifyQueue(member)) return i18n.__("common.errorNotChannel");
-
-            let songs = queue.songs;
-            for (let i = songs.length - 1; i > 1; i--) {
-              let j = 1 + Math.floor(Math.random() * i);
-              [songs[i], songs[j]] = [songs[j], songs[i]];
-            }
-            queue.songs = songs;
-
-            queue.textChannel.send(i18n.__mf("shuffle.result", { author: user })).catch(console.error);
-            break;
-
-          case "⏹":
-            reaction.users.remove(user).catch(console.error);
-            if (!canModifyQueue(member)) return i18n.__("common.errorNotChannel");
-            queue.songs = [];
-            queue.textChannel.send(i18n.__mf("play.stopSong", { author: user })).catch(console.error);
-            try {
-              queue.connection.dispatcher.end();
-            } catch (error) {
-              console.error(error);
-              queue.connection.disconnect();
-            }
-            collector.stop();
-            break;
-
-          default:
-            reaction.users.remove(user).catch(console.error);
-            break;
-        }
-      });
-
-      collector.on("end", () => {
-        playingMessage.reactions.removeAll().catch(console.error);
-        if (PRUNING && playingMessage && !playingMessage.deleted) {
-          playingMessage.delete({ timeout: 3000 }).catch(console.error);
-        }
-      });
+      await playingMessage.react("");
+      await playingMessage.react("");
+      await playingMessage.react("");
+      await playingMessage.react("");
+      await playingMessage.react("");
+      await playingMessage.react("");
+      await playingMessage.react("");
+    } catch (error) {
+      console.error(error);
     }
+
+    const filter = (reaction, user) => user.id !== message.client.user.id;
+    var collector = playingMessage.createReactionCollector(filter, {
+      time: song.duration > 0 ? song.duration * 1000 : 600000
+    });
+
+    collector.on("collect", (reaction, user) => {
+      if (!queue) return;
+      const member = message.guild.member(user);
+
+      switch (reaction.emoji.name) {
+        case "":
+          queue.playing = true;
+          reaction.users.remove(user).catch(console.error);
+          if (!canModifyQueue(member)) return;
+          queue.connection.dispatcher.end();
+          queue.textChannel.send(`${user} ⏩ skipped the song`).catch(console.error);
+          collector.stop();
+          break;
+
+        case "⏸":
+          reaction.users.remove(user).catch(console.error);
+          if (!canModifyQueue(member)) return;
+          if (queue.playing) {
+            queue.playing = !queue.playing;
+            queue.connection.dispatcher.pause(true);
+            queue.textChannel.send(`${user} ⏸ paused the music.`).catch(console.error);
+          } else {
+            queue.playing = !queue.playing;
+            queue.connection.dispatcher.resume();
+            queue.textChannel.send(`${user} ▶ resumed the music!`).catch(console.error);
+          }
+          break;
+
+        case "🔇":
+          reaction.users.remove(user).catch(console.error);
+          if (!canModifyQueue(member)) return;
+          if (queue.volume <= 0) {
+            queue.volume = 100;
+            queue.connection.dispatcher.setVolumeLogarithmic(100 / 100);
+            queue.textChannel.send(`${user} 🔊 unmuted the music!`).catch(console.error);
+          } else {
+            queue.volume = 0;
+            queue.connection.dispatcher.setVolumeLogarithmic(0);
+            queue.textChannel.send(`${user} 🔇 muted the music!`).catch(console.error);
+          }
+          break;
+
+        case "🔉":
+          reaction.users.remove(user).catch(console.error);
+          if (!canModifyQueue(member) || queue.volume == 0) return;
+          if (queue.volume - 10 <= 0) queue.volume = 0;
+          else queue.volume = queue.volume - 10;
+          queue.connection.dispatcher.setVolumeLogarithmic(queue.volume / 100);
+          queue.textChannel
+            .send(`${user} 🔉 decreased the volume, the volume is now ${queue.volume}%`)
+            .catch(console.error);
+          break;
+
+        case "🔊":
+          reaction.users.remove(user).catch(console.error);
+          if (!canModifyQueue(member) || queue.volume == 100) return;
+          if (queue.volume + 10 >= 100) queue.volume = 100;
+          else queue.volume = queue.volume + 10;
+          queue.connection.dispatcher.setVolumeLogarithmic(queue.volume / 100);
+          queue.textChannel
+            .send(`${user} 🔊 increased the volume, the volume is now ${queue.volume}%`)
+            .catch(console.error);
+          break;
+
+        case "🔁":
+          reaction.users.remove(user).catch(console.error);
+          if (!canModifyQueue(member)) return;
+          queue.loop = !queue.loop;
+          queue.textChannel.send(`${user} Loop is now ${queue.loop ? "**on**" : "**off**"}  ${EMOJI_DONE} `).catch(console.error);
+          break;
+
+        case "⏹":
+          reaction.users.remove(user).catch(console.error);
+          if (!canModifyQueue(member)) return;
+          queue.songs = [];
+          queue.textChannel.send(`${user} stopped the music. ${EMOJI_DONE}`).catch(console.error);
+          try {
+            queue.connection.dispatcher.end();
+          } catch (error) {
+            console.error(error);
+            queue.connection.disconnect();
+          }
+          collector.stop();
+          break;
+
+        default:
+          reaction.users.remove(user).catch(console.error);
+          break;
+      }
+    });
+
+    collector.on("end", () => {
+      playingMessage.reactions.removeAll().catch(console.error);
+      if (PRUNING && playingMessage && !playingMessage.deleted) {
+        playingMessage.delete({ timeout: 3000 }).catch(console.error);
+      }
+    });
   }
 };
